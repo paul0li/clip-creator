@@ -25,7 +25,7 @@ def _build_parser() -> argparse.ArgumentParser:
     )
     subparsers = parser.add_subparsers(dest="command")
 
-    # --- select subcommand (Card 1) ---
+    # --- select subcommand ---
     select_parser = subparsers.add_parser(
         "select", help="Analyse audio and select the best clip segments."
     )
@@ -48,15 +48,15 @@ def _build_parser() -> argparse.ArgumentParser:
         help="Whisper model size (tiny/base/small/medium/large-v3)",
     )
 
-    # --- cut subcommand (Card 2) ---
+    # --- cut subcommand ---
     cut_parser = subparsers.add_parser(
-        "cut", help="Cut video clips from Card 1 segment output."
+        "cut", help="Cut video clips from segment selection output."
     )
     cut_parser.add_argument("video", help="Path to the source video file")
     cut_parser.add_argument(
         "--segments",
         required=True,
-        help="Path to Card 1 JSON output (or inline JSON string)",
+        help="Path to segments JSON output (or inline JSON string)",
     )
     cut_parser.add_argument(
         "--output-dir",
@@ -68,7 +68,7 @@ def _build_parser() -> argparse.ArgumentParser:
 
 
 def _handle_select(args: argparse.Namespace) -> None:
-    """Run the segment-selection pipeline (Card 1)."""
+    """Run the segment-selection pipeline."""
     overrides: dict[str, str] = {}
     if args.llm_provider:
         overrides["llm.provider"] = args.llm_provider
@@ -125,7 +125,7 @@ def _parse_segments(raw: str) -> list[CandidateSegment]:
 
 
 def _handle_cut(args: argparse.Namespace) -> None:
-    """Run the clip-cutting pipeline (Card 2)."""
+    """Run the clip-cutting pipeline."""
     segments = _parse_segments(args.segments)
 
     try:

@@ -1,4 +1,4 @@
-# Backlog A: Clip Evaluation and Progressive Ranking Improvement
+# Clip Evaluation and Progressive Ranking Improvement
 
 ## Context / Problem
 
@@ -11,7 +11,7 @@ After receiving the 3 clips, Su rates each one via WhatsApp and assigns a catego
 ## Scope
 
 **In scope:**
-- After delivering clips (Card 5), send a follow-up WhatsApp message asking Su to rate each clip.
+- After delivering clips, send a follow-up WhatsApp message asking Su to rate each clip.
 - Collect per-clip feedback:
   - Category: funny / controversial / interesting / emotional.
   - Rating: simple scale (e.g., 1-5 or thumbs up/down).
@@ -37,5 +37,5 @@ After receiving the 3 clips, Su rates each one via WhatsApp and assigns a catego
 
 - WhatsApp interactive messages (buttons/lists) can simplify input, but require approved templates.
 - Storage: start with a simple JSON or SQLite database. Migrate to a proper DB only if needed.
-- Ranking improvement: inject top-rated clip transcripts as few-shot examples into the Card 1 selection prompt. This is the simplest path before exploring embeddings or vector search.
-- Depends on: Card 5 (WhatsApp delivery) being operational.
+- Ranking improvement: inject top-rated clip transcripts as few-shot examples into the segment selection prompt. This is the simplest path before exploring embeddings or vector search.
+- Depends on: WhatsApp delivery being operational.

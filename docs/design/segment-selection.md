@@ -49,7 +49,7 @@ clip-creator episode.mp3
 clip-creator episode.mp3 --transcript transcript.json
 
 # Save output to a file instead of printing it
-clip-creator episode.mp3 --output segments.json
+clip-creator episode.mp3 --output segments.jsowhan
 ```
 
 Output is JSON printed to the terminal (or a file with `--output`). n8n can pipe it directly.

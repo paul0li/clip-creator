@@ -1,4 +1,4 @@
-# Backlog B: YouTube Live Chat Signals for Segment Selection
+# YouTube Live Chat Signals for Segment Selection
 
 ## Context / Problem
 
@@ -6,7 +6,7 @@ The podcast streams live on YouTube before publishing the edited episode. The li
 
 ## Objective
 
-Incorporate YouTube live chat activity as a complementary signal in the segment ranking process (Card 1), improving detection of "funny" or high-reaction moments that transcript analysis alone may miss.
+Incorporate YouTube live chat activity as a complementary signal in the segment ranking process, improving detection of "funny" or high-reaction moments that transcript analysis alone may miss.
 
 ## Scope
 
@@ -15,7 +15,7 @@ Incorporate YouTube live chat activity as a complementary signal in the segment 
 - Compute a "chat score" per time window:
   - Message volume spikes (messages per second relative to baseline).
   - Density of laughter tokens and emojis (jaja, jajaja, LOL, crying-laughing emoji, etc.).
-- Align chat time windows with transcript candidate windows from Card 1.
+- Align chat time windows with transcript candidate windows from segment selection.
 - Use the chat score as a weighted factor in the ranking (not a replacement for transcript analysis).
 
 **Out of scope:**
@@ -34,6 +34,6 @@ Incorporate YouTube live chat activity as a complementary signal in the segment 
 
 - YouTube chat replay can be extracted via `yt-dlp --write-chat` or the YouTube Data API (liveChatMessages endpoint).
 - Scoring: simple sliding window (e.g., 30 seconds) counting messages and laughter tokens. Normalize against the episode's average chat rate.
-- Integration: pass the chat scores as an additional input to the Card 1 selection prompt or as a post-ranking multiplier.
+- Integration: pass the chat scores as an additional input to the segment selection prompt or as a post-ranking multiplier.
 - Spanish laughter tokens: "jaja", "jajaja", "jsjs", "xd", "xDD". Include relevant emojis.
-- Depends on: Card 1 (segment selection) being operational.
+- Depends on: segment selection being operational.

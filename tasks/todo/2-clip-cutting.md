@@ -1,25 +1,25 @@
-# Card 2: Cut Selected Segments into Separate Video Files
+# Cut Selected Segments into Separate Video Files
 
 ## Context / Problem
 
-Once Card 1 produces 3 timestamp ranges, someone still has to manually open the source video, find each timestamp, and export clips. This is mechanical work that adds delay and introduces human error (wrong timestamps, missing audio, etc.).
+Once segment selection produces 3 timestamp ranges, someone still has to manually open the source video, find each timestamp, and export clips. This is mechanical work that adds delay and introduces human error (wrong timestamps, missing audio, etc.).
 
 ## Objective
 
-Given the source video file and 3 timestamp ranges, automatically cut and export 3 independent video files in the original aspect ratio (16:9). No format conversion happens in this card.
+Given the source video file and 3 timestamp ranges, automatically cut and export 3 independent video files in the original aspect ratio (16:9). No format conversion happens in this step.
 
 ## Scope
 
 **In scope:**
-- Receive source video path + 3 `[start, end]` timestamp pairs (output of Card 1).
+- Receive source video path + 3 `[start, end]` timestamp pairs (output of segment selection).
 - Cut video using FFmpeg (stream copy where possible for speed; re-encode only if needed for clean cuts).
 - Export 3 files to a defined output directory with predictable naming (e.g., `clip_1.mp4`, `clip_2.mp4`, `clip_3.mp4`).
 - Preserve original resolution, codec, and audio.
 
 **Out of scope:**
-- Vertical (9:16) conversion -- handled in Card 3.
-- Subtitles -- handled in Card 4.
-- Delivery -- handled in Card 5.
+- Vertical (9:16) conversion -- handled in the vertical conversion step.
+- Subtitles -- handled in the subtitle burn-in step.
+- Delivery -- handled in the WhatsApp delivery step.
 - Any re-encoding beyond what is needed for frame-accurate cuts.
 
 ## Acceptance Criteria

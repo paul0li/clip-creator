@@ -1,17 +1,17 @@
-# Card 3: Convert Clips to Vertical 9:16 Format
+# Convert Clips to Vertical 9:16 Format
 
 ## Context / Problem
 
-The 3 clips from Card 2 are in the original 16:9 horizontal format. Reels and short-form platforms require 9:16 vertical video. Today this is done manually in CapCut, adding time and friction.
+The 3 clips from clip cutting are in the original 16:9 horizontal format. Reels and short-form platforms require 9:16 vertical video. Today this is done manually in CapCut, adding time and friction.
 
 ## Objective
 
-Automatically convert each 16:9 clip into a 9:16 vertical video using a simple, deterministic approach (center crop or blurred-background fill). No subtitles are added in this card.
+Automatically convert each 16:9 clip into a 9:16 vertical video using a simple, deterministic approach (center crop or blurred-background fill). No subtitles are added in this step.
 
 ## Scope
 
 **In scope:**
-- Receive 3 horizontal clip files (output of Card 2).
+- Receive 3 horizontal clip files (output of clip cutting).
 - Apply one conversion strategy per clip:
   - Option A: Center-crop to 9:16 (loses edges, keeps sharpness).
   - Option B: Blurred/scaled background with original video centered (preserves full frame, adds background).
@@ -20,8 +20,8 @@ Automatically convert each 16:9 clip into a 9:16 vertical video using a simple, 
 
 **Out of scope:**
 - Dynamic speaker tracking or face detection -- too complex for MVP.
-- Subtitles -- handled in Card 4.
-- Delivery -- handled in Card 5.
+- Subtitles -- handled in the subtitle burn-in step.
+- Delivery -- handled in the WhatsApp delivery step.
 - Any manual CapCut or Canva steps.
 
 ## Acceptance Criteria

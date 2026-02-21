@@ -1,4 +1,4 @@
-# Card 4: Subtitle Generation and Burn-in Render
+# Subtitle Generation and Burn-in Render
 
 ## Context / Problem
 
@@ -6,12 +6,12 @@ Short-form video performs significantly better with burned-in subtitles. Most vi
 
 ## Objective
 
-For each of the 3 vertical clips (from Card 3), generate accurate Spanish subtitles from the transcript and burn them into the video. Output final rendered videos optimized for mobile readability.
+For each of the 3 vertical clips, generate accurate Spanish subtitles from the transcript and burn them into the video. Output final rendered videos optimized for mobile readability.
 
 ## Scope
 
 **In scope:**
-- Extract the transcript segment corresponding to each clip's timestamps (from Card 1 output).
+- Extract the transcript segment corresponding to each clip's timestamps (from segment selection output).
 - Generate word-level or phrase-level SRT/ASS subtitle files for each clip.
 - Style subtitles for mobile readability: large font, high contrast, centered lower-third positioning, max 2 lines.
 - Burn subtitles into each vertical video using FFmpeg.
@@ -21,7 +21,7 @@ For each of the 3 vertical clips (from Card 3), generate accurate Spanish subtit
 - Transcript generation from scratch (reuse the existing episode transcript).
 - Animated or karaoke-style word highlighting -- keep it simple for MVP.
 - Thumbnails or cover images.
-- Delivery -- handled in Card 5.
+- Delivery -- handled in the WhatsApp delivery step.
 
 ## Acceptance Criteria
 

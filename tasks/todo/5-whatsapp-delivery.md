@@ -1,4 +1,4 @@
-# Card 5: WhatsApp Delivery of Final Clips
+# WhatsApp Delivery of Final Clips
 
 ## Context / Problem
 
@@ -15,12 +15,12 @@ Send the 3 final videos to Su via WhatsApp, accompanied by a structured message 
 **In scope:**
 - Upload each video to a media host accessible by WhatsApp Business Cloud API (or use the API's built-in media upload).
 - Send 3 video messages + 1 summary text message to Su's WhatsApp number.
-- Summary message includes: episode name/date, and for each clip: clip number, timestamp range, and the rationale from Card 1.
+- Summary message includes: episode name/date, and for each clip: clip number, timestamp range, and the rationale from segment selection.
 - Handle API errors gracefully (retry once, then log failure).
 
 **Out of scope:**
 - Autoposting to Instagram, TikTok, YouTube, or any other platform.
-- Receiving replies or interactive flows (see Backlog Card A: Clip Evaluator).
+- Receiving replies or interactive flows (see backlog: clip evaluator).
 - Multi-recipient delivery.
 - n8n does not eliminate WhatsApp API costs; it only orchestrates the API calls. We accept the WhatsApp Business Cloud API cost for this low-volume use case (3 videos/week to 1 number).
 
