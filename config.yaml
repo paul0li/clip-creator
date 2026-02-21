@@ -1,6 +1,6 @@
 whisper:
   mode: local          # "local" or "api"
-  model: medium        # tiny/base/small/medium/large-v3
+  model: large-v3        # tiny/base/small/medium/large-v3
   language: es
 
 jingle:
