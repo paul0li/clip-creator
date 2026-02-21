@@ -2,7 +2,9 @@
 
 from __future__ import annotations
 
+import sys
 from datetime import datetime, timezone
+from pathlib import Path
 
 from clip_creator.config import Config
 from clip_creator.jingle_detector import detect_jingle_boundaries
@@ -15,6 +17,13 @@ from clip_creator.transcriber import load_transcript, transcribe
 def run_pipeline(audio_path: str, config: Config) -> PipelineOutput:
     """Full pipeline: transcribe → detect jingles → select segments."""
     transcript = transcribe(audio_path, config)
+
+    # Save transcript for inspection / reuse
+    stem = Path(audio_path).stem
+    transcript_file = Path(audio_path).parent / f"{stem}_transcript.json"
+    transcript_file.write_text(transcript.model_dump_json(indent=2))
+    print(f"Transcript saved to {transcript_file}", file=sys.stderr)
+
     return _run_from_transcript(audio_path, transcript, config)
 
 

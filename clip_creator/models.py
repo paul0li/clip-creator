@@ -42,9 +42,20 @@ class PipelineOutput(BaseModel):
     timestamp: str
 
 
+class ClipResult(BaseModel):
+    path: str
+    start: float
+    end: float
+    duration: float
+
+
 class TranscriptionError(Exception):
     """Transcription failed — pipeline cannot continue."""
 
 
 class LLMError(Exception):
     """LLM call or parsing failed after retries."""
+
+
+class CutterError(Exception):
+    """FFmpeg clip cutting failed."""
