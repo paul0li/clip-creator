@@ -20,9 +20,6 @@ dependencies = [
 [project.scripts]
 clip-creator = "clip_creator.cli:main"
 
-[tool.setuptools.packages.find]
-include = ["clip_creator"]
-
 [build-system]
-requires = ["setuptools>=68"]
-build-backend = "setuptools.build_meta"
+requires = ["hatchling"]
+build-backend = "hatchling.build"
