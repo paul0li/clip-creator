@@ -1,0 +1,18 @@
+whisper:
+  mode: local          # "local" or "api"
+  model: medium        # tiny/base/small/medium/large-v3
+  language: es
+
+jingle:
+  reference_path: assets/jingle_reference.wav
+  threshold: 0.6
+
+llm:
+  provider: openai     # "anthropic" or "openai"
+  model: gpt-4o-mini
+  temperature: 0.3
+
+segments:
+  count: 3
+  min_seconds: 25
+  max_seconds: 40
