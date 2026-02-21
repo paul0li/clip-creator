@@ -28,9 +28,26 @@ export OPENAI_API_KEY=sk-...
 
 ## Usage
 
-### Step 1: Select segments
+### `run` — Full pipeline (recommended)
 
-Transcribe an episode and pick the 3 best clip-worthy moments:
+Go from video to clips in one command:
+
+```bash
+# Produces clips in ./clips and prints JSON output
+clip-creator run video.mp4 --output-dir ./clips
+
+# Debug mode — also saves transcript and segments JSON files next to the video
+clip-creator run video.mp4 --output-dir ./clips --debug
+
+# Override LLM or Whisper settings
+clip-creator run video.mp4 --llm-provider openai --whisper-model large-v3
+```
+
+This extracts audio from the video, transcribes it with Whisper, detects jingle boundaries, picks the 3 best moments via LLM, and cuts the clips with FFmpeg.
+
+### `select` — Pick segments only
+
+Transcribe an episode and pick the 3 best clip-worthy moments (no cutting):
 
 ```bash
 # Basic — transcribes with Whisper, then selects segments
@@ -44,13 +61,14 @@ clip-creator select episode.mp3 -o segments.json
 
 # Skip transcription if you already have a transcript
 clip-creator select episode.mp3 --transcript transcript.json
+
+# Debug mode — saves transcript JSON next to the audio file
+clip-creator select episode.mp3 --debug
 ```
 
-The transcript is saved automatically next to the audio file (e.g. `episode_transcript.json`) so you can reuse it later.
+### `cut` — Cut clips from segments
 
-### Step 2: Cut clips
-
-Take the segments from Step 1 and cut actual video clips with FFmpeg:
+Take the segments from `select` and cut actual video clips with FFmpeg:
 
 ```bash
 # Cut clips from a video using the segment output
@@ -59,7 +77,7 @@ clip-creator cut video.mp4 --segments segments.json --output-dir ./clips
 
 This produces `clip_1.mp4`, `clip_2.mp4`, `clip_3.mp4` in the output directory.
 
-The `--segments` flag accepts either the full JSON output from Step 1 or a bare list of segments.
+The `--segments` flag accepts either the full JSON output from `select` or a bare list of segments.
 
 ### Backward compatibility
 
