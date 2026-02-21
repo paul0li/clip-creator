@@ -15,7 +15,44 @@ from clip_creator.models import (
     LLMError,
     TranscriptionError,
 )
-from clip_creator.pipeline import run_pipeline, run_pipeline_from_transcript
+from clip_creator.pipeline import (
+    run_full_pipeline,
+    run_pipeline,
+    run_pipeline_from_transcript,
+)
+
+
+def _add_common_flags(parser: argparse.ArgumentParser) -> None:
+    """Add flags shared by select and run subcommands."""
+    parser.add_argument(
+        "--config", help="Path to config.yaml (default: ./config.yaml)"
+    )
+    parser.add_argument("--llm-provider", help='LLM provider: "anthropic" or "openai"')
+    parser.add_argument("--llm-model", help="LLM model name")
+    parser.add_argument("--whisper-mode", help='Whisper mode: "local" or "api"')
+    parser.add_argument(
+        "--whisper-model",
+        help="Whisper model size (tiny/base/small/medium/large-v3)",
+    )
+    parser.add_argument(
+        "--debug",
+        action="store_true",
+        help="Save intermediate files (transcript, segments) for inspection",
+    )
+
+
+def _collect_overrides(args: argparse.Namespace) -> dict[str, str] | None:
+    """Build config overrides dict from CLI flags."""
+    overrides: dict[str, str] = {}
+    if args.llm_provider:
+        overrides["llm.provider"] = args.llm_provider
+    if args.llm_model:
+        overrides["llm.model"] = args.llm_model
+    if args.whisper_mode:
+        overrides["whisper.mode"] = args.whisper_mode
+    if args.whisper_model:
+        overrides["whisper.model"] = args.whisper_model
+    return overrides or None
 
 
 def _build_parser() -> argparse.ArgumentParser:
@@ -37,16 +74,7 @@ def _build_parser() -> argparse.ArgumentParser:
     select_parser.add_argument(
         "--output", "-o", help="Write JSON output to this file instead of stdout"
     )
-    select_parser.add_argument(
-        "--config", help="Path to config.yaml (default: ./config.yaml)"
-    )
-    select_parser.add_argument("--llm-provider", help='LLM provider: "anthropic" or "openai"')
-    select_parser.add_argument("--llm-model", help="LLM model name")
-    select_parser.add_argument("--whisper-mode", help='Whisper mode: "local" or "api"')
-    select_parser.add_argument(
-        "--whisper-model",
-        help="Whisper model size (tiny/base/small/medium/large-v3)",
-    )
+    _add_common_flags(select_parser)
 
     # --- cut subcommand ---
     cut_parser = subparsers.add_parser(
@@ -64,29 +92,32 @@ def _build_parser() -> argparse.ArgumentParser:
         help="Directory to write clips into (default: ./clips)",
     )
 
+    # --- run subcommand ---
+    run_parser = subparsers.add_parser(
+        "run", help="Full pipeline: video → segments → clips."
+    )
+    run_parser.add_argument("video", help="Path to the source video file")
+    run_parser.add_argument(
+        "--output-dir",
+        default="./clips",
+        help="Directory to write clips into (default: ./clips)",
+    )
+    _add_common_flags(run_parser)
+
     return parser
 
 
 def _handle_select(args: argparse.Namespace) -> None:
     """Run the segment-selection pipeline."""
-    overrides: dict[str, str] = {}
-    if args.llm_provider:
-        overrides["llm.provider"] = args.llm_provider
-    if args.llm_model:
-        overrides["llm.model"] = args.llm_model
-    if args.whisper_mode:
-        overrides["whisper.mode"] = args.whisper_mode
-    if args.whisper_model:
-        overrides["whisper.model"] = args.whisper_model
-
+    overrides = _collect_overrides(args)
     config_path = Path(args.config) if args.config else None
-    config = load_config(config_path=config_path, cli_overrides=overrides or None)
+    config = load_config(config_path=config_path, cli_overrides=overrides)
 
     try:
         if args.transcript:
             result = run_pipeline_from_transcript(args.audio, args.transcript, config)
         else:
-            result = run_pipeline(args.audio, config)
+            result = run_pipeline(args.audio, config, debug=args.debug)
     except (TranscriptionError, LLMError) as e:
         print(f"Error: {e}", file=sys.stderr)
         sys.exit(1)
@@ -141,6 +172,23 @@ def _handle_cut(args: argparse.Namespace) -> None:
     print(json_output)
 
 
+def _handle_run(args: argparse.Namespace) -> None:
+    """Run the full pipeline: video → audio → segments → clips."""
+    overrides = _collect_overrides(args)
+    config_path = Path(args.config) if args.config else None
+    config = load_config(config_path=config_path, cli_overrides=overrides)
+
+    try:
+        result = run_full_pipeline(
+            args.video, config, args.output_dir, debug=args.debug
+        )
+    except (TranscriptionError, LLMError, CutterError) as e:
+        print(f"Error: {e}", file=sys.stderr)
+        sys.exit(1)
+
+    print(result.model_dump_json(indent=2))
+
+
 def main() -> None:
     parser = _build_parser()
     args = parser.parse_args()
@@ -149,6 +197,8 @@ def main() -> None:
         _handle_select(args)
     elif args.command == "cut":
         _handle_cut(args)
+    elif args.command == "run":
+        _handle_run(args)
     else:
         # Backward compat: bare `clip-creator audio.mp3` (no subcommand)
         # Re-parse with the first positional as audio for select

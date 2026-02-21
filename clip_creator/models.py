@@ -49,6 +49,16 @@ class ClipResult(BaseModel):
     duration: float
 
 
+class RunOutput(BaseModel):
+    episode_file: str
+    duration: float
+    segments: list[CandidateSegment]
+    topic_boundaries: list[TopicBoundary]
+    model_used: str
+    timestamp: str
+    clips: list[ClipResult]
+
+
 class TranscriptionError(Exception):
     """Transcription failed — pipeline cannot continue."""
 
