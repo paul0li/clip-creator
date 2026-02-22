@@ -3,6 +3,10 @@ whisper:
   model: large-v3        # tiny/base/small/medium/large-v3
   language: es
 
+intro:
+  reference_path: assets/intro.mp3
+  threshold: 0.6
+
 jingle:
   reference_path: assets/jingle_reference.wav
   threshold: 0.6

@@ -21,6 +21,11 @@ class WhisperConfig(BaseModel):
     language: str = "es"
 
 
+class IntroConfig(BaseModel):
+    reference_path: str = "assets/intro.mp3"
+    threshold: float = 0.6
+
+
 class JingleConfig(BaseModel):
     reference_path: str = "assets/jingle_reference.wav"
     threshold: float = 0.6
@@ -40,6 +45,7 @@ class SegmentsConfig(BaseModel):
 
 class Config(BaseModel):
     whisper: WhisperConfig = WhisperConfig()
+    intro: IntroConfig = IntroConfig()
     jingle: JingleConfig = JingleConfig()
     llm: LLMConfig = LLMConfig()
     segments: SegmentsConfig = SegmentsConfig()

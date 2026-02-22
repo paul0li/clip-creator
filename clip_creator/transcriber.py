@@ -17,17 +17,50 @@ console = Console(stderr=True)
 _SENTENCE_END = re.compile(r"[.?!¿¡]$")
 
 
-def transcribe(audio_path: str, config: Config) -> Transcript:
-    """Transcribe an audio file, returning sentence-level segments."""
+def transcribe(
+    audio_path: str,
+    config: Config,
+    *,
+    skip_seconds: float = 0.0,
+    end_seconds: float = 0.0,
+) -> Transcript:
+    """Transcribe an audio file, returning sentence-level segments.
+
+    If skip_seconds > 0, trims that many seconds from the start (intro).
+    If end_seconds > 0, stops at that timestamp (outro).
+    Timestamps are offset back so they match the original audio.
+    """
+    needs_trim = skip_seconds > 0 or end_seconds > 0
+    source_path = audio_path
+
+    if needs_trim:
+        source_path = _trim_audio(audio_path, skip_seconds, end_seconds)
+        parts = []
+        if skip_seconds > 0:
+            parts.append(f"intro ({skip_seconds:.1f}s)")
+        if end_seconds > 0:
+            parts.append(f"outro (from {end_seconds:.1f}s)")
+        console.print(f"[dim]Trimmed {' and '.join(parts)} before transcribing.[/dim]")
+
     if config.whisper.mode == "local":
-        words, duration = _transcribe_local(audio_path, config)
+        words, duration = _transcribe_local(source_path, config)
     elif config.whisper.mode == "api":
-        words, duration = _transcribe_api(audio_path, config)
+        words, duration = _transcribe_api(source_path, config)
     else:
         raise TranscriptionError(f"Unknown whisper mode: {config.whisper.mode}")
 
     if not words:
         raise TranscriptionError("Whisper returned no words")
+
+    # Offset timestamps back to match the original audio
+    if skip_seconds > 0:
+        for w in words:
+            w.start += skip_seconds
+            w.end += skip_seconds
+        duration += skip_seconds
+
+    if needs_trim:
+        Path(source_path).unlink(missing_ok=True)
 
     segments = _group_words_into_sentences(words)
     return Transcript(segments=segments, language=config.whisper.language, duration=duration)
@@ -36,6 +69,24 @@ def transcribe(audio_path: str, config: Config) -> Transcript:
 def load_transcript(path: str) -> Transcript:
     """Load a previously saved transcript from JSON."""
     return Transcript.model_validate_json(Path(path).read_text())
+
+
+def _trim_audio(audio_path: str, start: float, end: float) -> str:
+    """Trim audio: skip before `start`, stop at `end`. Returns path to trimmed file."""
+    import subprocess
+
+    trimmed = Path(audio_path).with_stem(Path(audio_path).stem + "_trimmed")
+    cmd = ["ffmpeg", "-i", audio_path]
+    if start > 0:
+        cmd += ["-ss", str(start)]
+    if end > 0:
+        cmd += ["-to", str(end - start if start > 0 else end)]
+    cmd += ["-acodec", "copy", "-y", str(trimmed)]
+
+    result = subprocess.run(cmd, capture_output=True, text=True)
+    if result.returncode != 0:
+        raise TranscriptionError(f"ffmpeg trim failed: {result.stderr}")
+    return str(trimmed)
 
 
 def _transcribe_local(audio_path: str, config: Config) -> tuple[list[Word], float]:

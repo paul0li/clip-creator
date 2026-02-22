@@ -9,6 +9,7 @@ from pathlib import Path
 
 from clip_creator.config import Config, load_config
 from clip_creator.cutter import cut_clips
+from clip_creator.intro_detector import detect_music_boundaries
 from clip_creator.jingle_detector import detect_jingle_boundaries
 from clip_creator.llm_client import LLMClient
 from clip_creator.models import PipelineOutput, RunOutput, Transcript
@@ -46,7 +47,12 @@ def run_pipeline(
     audio_path: str, config: Config, *, debug: bool = False
 ) -> PipelineOutput:
     """Full pipeline: transcribe → detect jingles → select segments."""
-    transcript = transcribe(audio_path, config)
+    music = detect_music_boundaries(audio_path, config)
+    transcript = transcribe(
+        audio_path, config,
+        skip_seconds=music.intro_end or 0.0,
+        end_seconds=music.outro_start or 0.0,
+    )
 
     if debug:
         stem = Path(audio_path).stem
@@ -74,7 +80,12 @@ def run_full_pipeline(
 ) -> RunOutput:
     """End-to-end: video → audio → transcribe → jingles → segments → cut clips."""
     audio_path = extract_audio(video_path)
-    transcript = transcribe(audio_path, config)
+    music = detect_music_boundaries(audio_path, config)
+    transcript = transcribe(
+        audio_path, config,
+        skip_seconds=music.intro_end or 0.0,
+        end_seconds=music.outro_start or 0.0,
+    )
 
     stem = Path(video_path).stem
 
