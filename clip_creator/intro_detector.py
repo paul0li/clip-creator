@@ -1,4 +1,10 @@
-"""Detects where the intro/outro music plays in the episode audio."""
+"""Detects where the intro/outro music starts and stops in the episode.
+
+The reference file can be any length (even the full loop). We take a short
+sample from it and slide it across the episode to build a similarity curve.
+Where the curve drops below threshold = music stopped (intro end).
+Where it rises above threshold near the end = music started again (outro start).
+"""
 
 from __future__ import annotations
 
@@ -10,6 +16,12 @@ from rich.console import Console
 from clip_creator.config import Config
 
 console = Console(stderr=True)
+
+# How many seconds of the reference to use as the matching sample
+_SAMPLE_DURATION = 30.0
+
+# Step size (in seconds) for sliding the sample across the episode
+_STEP_SECONDS = 5.0
 
 
 @dataclass
@@ -46,72 +58,108 @@ def _detect(
     import numpy as np
     from scipy.signal import fftconvolve
 
-    episode, sr = librosa.load(episode_path, sr=22050, mono=True)
-    reference, _ = librosa.load(reference_path, sr=22050, mono=True)
+    sr = 22050
 
-    ref_duration = len(reference) / sr
+    # Load a short sample from the middle of the reference (avoids fade-in/out)
+    ref_full, _ = librosa.load(reference_path, sr=sr, mono=True)
+    ref_total_sec = len(ref_full) / sr
+    sample_start = min(30.0, ref_total_sec / 3)  # skip first 30s or 1/3
+    sample_frames = int(_SAMPLE_DURATION * sr)
+    start_frame = int(sample_start * sr)
+    reference = ref_full[start_frame : start_frame + sample_frames]
 
-    # Mel spectrograms
-    ep_mel = librosa.power_to_db(
-        librosa.feature.melspectrogram(y=episode, sr=sr, n_mels=128), ref=np.max
-    )
+    if len(reference) < sr * 5:
+        console.print("[yellow]Intro reference too short, skipping detection.[/yellow]")
+        return MusicBoundaries()
+
+    # Build mel spectrogram for the reference sample
     ref_mel = librosa.power_to_db(
         librosa.feature.melspectrogram(y=reference, sr=sr, n_mels=128), ref=np.max
     )
-
-    # Average across mel bands and normalize
-    ep_flat = ep_mel.mean(axis=0)
     ref_flat = ref_mel.mean(axis=0)
-    ep_flat = (ep_flat - ep_flat.mean()) / (ep_flat.std() + 1e-8)
     ref_flat = (ref_flat - ref_flat.mean()) / (ref_flat.std() + 1e-8)
 
-    # Cross-correlation
-    correlation = fftconvolve(ep_flat, ref_flat[::-1], mode="valid")
-    correlation = correlation / len(ref_flat)
+    # Load the episode
+    episode, _ = librosa.load(episode_path, sr=sr, mono=True)
+    ep_total_sec = len(episode) / sr
 
+    # Slide the sample across the episode and compute similarity at each position
     hop_length = 512
-    frames_to_seconds = hop_length / sr
+    step_frames = int(_STEP_SECONDS * sr)
+    sample_len = len(reference)
 
-    # Find all peaks above threshold
-    matches: list[tuple[float, float]] = []  # (start_time, confidence)
-    above = correlation >= threshold
-    i = 0
-    while i < len(above):
-        if above[i]:
-            # Find the best value in this cluster
-            best_val = correlation[i]
-            best_idx = i
-            while i < len(above) and above[i]:
-                if correlation[i] > best_val:
-                    best_val = correlation[i]
-                    best_idx = i
-                i += 1
-            matches.append((best_idx * frames_to_seconds, float(best_val)))
-        else:
-            i += 1
+    scores: list[tuple[float, float]] = []  # (timestamp, similarity)
 
-    if not matches:
-        console.print("[dim]No intro/outro music detected above threshold.[/dim]")
+    for offset in range(0, len(episode) - sample_len + 1, step_frames):
+        chunk = episode[offset : offset + sample_len]
+        chunk_mel = librosa.power_to_db(
+            librosa.feature.melspectrogram(y=chunk, sr=sr, n_mels=128), ref=np.max
+        )
+        chunk_flat = chunk_mel.mean(axis=0)
+        chunk_flat = (chunk_flat - chunk_flat.mean()) / (chunk_flat.std() + 1e-8)
+
+        # Use cross-correlation peak as similarity score
+        corr = fftconvolve(chunk_flat, ref_flat[::-1], mode="full")
+        similarity = float(np.max(corr) / len(ref_flat))
+
+        timestamp = offset / sr
+        scores.append((timestamp, similarity))
+
+    if not scores:
         return MusicBoundaries()
+
+    # Log the similarity curve for debugging (first 20 min worth of positions)
+    max_debug = int(20 * 60 / _STEP_SECONDS)
+    console.print("[dim]Music similarity scores (start of episode):[/dim]")
+    for ts, sim in scores[:max_debug]:
+        bar = "#" * int(sim * 40)
+        label = "<<" if sim >= threshold else ""
+        console.print(f"[dim]  {ts:7.1f}s  {sim:.3f}  {bar} {label}[/dim]")
+    if len(scores) > max_debug:
+        console.print(f"[dim]  ... ({len(scores)} total positions)[/dim]")
 
     boundaries = MusicBoundaries()
 
-    # First match → intro
-    intro_start, intro_conf = matches[0]
-    boundaries.intro_end = intro_start + ref_duration
-    console.print(
-        f"[green]Intro detected at {intro_start:.1f}s–{boundaries.intro_end:.1f}s "
-        f"(confidence: {intro_conf:.2f})[/green]"
-    )
+    # Find intro end: scan from the start, find the last position above threshold
+    # before a sustained drop below threshold
+    for i, (ts, sim) in enumerate(scores):
+        if sim >= threshold:
+            # This position has music — the intro ends after this chunk
+            boundaries.intro_end = ts + _SAMPLE_DURATION
+        else:
+            # First drop below threshold after finding music = intro ended
+            if boundaries.intro_end is not None:
+                break
 
-    # Last match → outro (only if it's a different match from the intro)
-    if len(matches) >= 2:
-        outro_start, outro_conf = matches[-1]
-        boundaries.outro_start = outro_start
-        outro_end = outro_start + ref_duration
+    if boundaries.intro_end:
         console.print(
-            f"[green]Outro detected at {outro_start:.1f}s–{outro_end:.1f}s "
-            f"(confidence: {outro_conf:.2f})[/green]"
+            f"[green]Intro music ends at ~{boundaries.intro_end:.1f}s[/green]"
         )
+
+    # Find outro start: scan from the end, find the last position above threshold
+    for i in range(len(scores) - 1, -1, -1):
+        ts, sim = scores[i]
+        if sim >= threshold:
+            boundaries.outro_start = ts
+        else:
+            if boundaries.outro_start is not None:
+                break
+
+    # Only report outro if it's clearly separate from the intro
+    if (
+        boundaries.outro_start is not None
+        and boundaries.intro_end is not None
+        and boundaries.outro_start <= boundaries.intro_end + 60
+    ):
+        # Outro overlaps with intro — there's no separate outro
+        boundaries.outro_start = None
+
+    if boundaries.outro_start:
+        console.print(
+            f"[green]Outro music starts at ~{boundaries.outro_start:.1f}s[/green]"
+        )
+
+    if not boundaries.intro_end and not boundaries.outro_start:
+        console.print("[dim]No intro/outro music detected above threshold.[/dim]")
 
     return boundaries
