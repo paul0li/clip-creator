@@ -16,12 +16,13 @@ from pathlib import Path
 from rich.console import Console
 
 from clip_creator.config import Config
+from clip_creator.models import format_timestamp
 
 console = Console(stderr=True)
 
 _SAMPLE_DURATION = 10.0  # seconds of reference to use as matching chunk
 _SAMPLE_RATE = 8000  # Hz — low rate saves memory, plenty for music detection
-_MIN_GAP_SECONDS = 10  # consecutive seconds below threshold to confirm boundary
+_MIN_GAP_SECONDS = 21  # consecutive seconds below threshold to confirm boundary
 
 
 @dataclass
@@ -140,7 +141,7 @@ def _detect(
         val = max(curve[s : s + 10])
         bar = "#" * int(val * 40)
         label = "<<" if val >= threshold else ""
-        console.print(f"[dim]  {s:5d}s  {val:.3f}  {bar} {label}[/dim]")
+        console.print(f"[dim]  {format_timestamp(s)}  {val:.3f}  {bar} {label}[/dim]")
 
     if len(curve) > 20 * 60:
         console.print("[dim]  ...[/dim]")
@@ -150,7 +151,7 @@ def _detect(
         val = max(curve[s : min(s + 10, len(curve))])
         bar = "#" * int(val * 40)
         label = "<<" if val >= threshold else ""
-        console.print(f"[dim]  {s:5d}s  {val:.3f}  {bar} {label}[/dim]")
+        console.print(f"[dim]  {format_timestamp(s)}  {val:.3f}  {bar} {label}[/dim]")
 
     # Find boundaries
     boundaries = MusicBoundaries()
@@ -167,11 +168,11 @@ def _detect(
 
     if boundaries.intro_end:
         console.print(
-            f"[green]Intro music ends at ~{boundaries.intro_end:.1f}s[/green]"
+            f"[green]Intro music ends at ~{format_timestamp(boundaries.intro_end)}[/green]"
         )
     if boundaries.outro_start:
         console.print(
-            f"[green]Outro music starts at ~{boundaries.outro_start:.1f}s[/green]"
+            f"[green]Outro music starts at ~{format_timestamp(boundaries.outro_start)}[/green]"
         )
     if not boundaries.intro_end and not boundaries.outro_start:
         console.print("[dim]No intro/outro music detected above threshold.[/dim]")
