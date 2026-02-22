@@ -17,7 +17,6 @@ from clip_creator.models import MusicBoundaries, format_timestamp
 
 console = Console(stderr=True)
 
-_SAMPLE_DURATION = 10.0  # seconds of reference to use as matching chunk
 _SAMPLE_RATE = 8000  # Hz — low rate saves memory, plenty for music detection
 _MIN_GAP_SECONDS = 21  # consecutive seconds below threshold to confirm boundary
 
@@ -75,38 +74,68 @@ def _find_outro_start(curve: list[float], threshold: float) -> float | None:
     return None
 
 
-def _detect_outro(episode, ref, sr: int, ep_sec: float, threshold: float):
-    """Detect outro using cross-correlation of a reference chunk against the episode tail."""
+def _detect_outro(
+    ep_mel, ref_mel, ep_sec: float, threshold: float, smooth_window: int
+) -> float | None:
+    """Detect outro by comparing the episode tail against the start of the reference.
+
+    The outro replays intro.mp3 from second 0, so episode[T+k] ≈ ref[k].
+    For each candidate T in the last 15 minutes, compute the average mel
+    similarity over a 30-second window and smooth the result.
+    """
     import numpy as np
-    from scipy.signal import fftconvolve
 
-    ref_total_sec = len(ref) / sr
-    sample_start = max(0.0, (ref_total_sec - _SAMPLE_DURATION) / 2)
-    start_frame = int(sample_start * sr)
-    sample_frames = int(_SAMPLE_DURATION * sr)
-    chunk = ref[start_frame : start_frame + sample_frames]
+    _CHECK_WINDOW = 30  # seconds to average for each candidate
+    _SEARCH_MINUTES = 15
+    search_start = max(0, int(ep_sec) - _SEARCH_MINUTES * 60)
+    ep_frames = ep_mel.shape[1]
+    ref_frames = ref_mel.shape[1]
 
-    if len(chunk) < sr * 3:
+    # For each candidate outro_start T, compare ep[T:T+window] vs ref[0:window]
+    raw_curve: list[float] = []
+    for t in range(search_start, int(ep_sec)):
+        remaining = min(ep_frames - t, ref_frames, _CHECK_WINDOW)
+        if remaining < 5:
+            raw_curve.append(0.0)
+            continue
+
+        sims = []
+        for k in range(remaining):
+            r = ref_mel[:, k]
+            e = ep_mel[:, t + k]
+            r_norm = np.linalg.norm(r)
+            e_norm = np.linalg.norm(e)
+            if r_norm > 0 and e_norm > 0:
+                sims.append(float(np.dot(r, e) / (r_norm * e_norm)))
+            else:
+                sims.append(1.0 if r_norm < 1e-6 and e_norm < 1e-6 else 0.0)
+        raw_curve.append(sum(sims) / len(sims))
+
+    if not raw_curve:
         return None
 
-    corr = fftconvolve(episode, chunk[::-1], mode="full")
-    valid_start = len(chunk) - 1
-    corr = corr[valid_start : valid_start + len(episode)]
-
-    n_seconds = int(len(corr) / sr)
+    # Smooth
     curve: list[float] = []
-    for s in range(n_seconds):
-        window = corr[s * sr : (s + 1) * sr]
-        curve.append(float(np.max(np.abs(window))))
+    for i in range(len(raw_curve)):
+        s = max(0, i - smooth_window // 2)
+        e = min(len(raw_curve), i + smooth_window // 2 + 1)
+        curve.append(sum(raw_curve[s:e]) / (e - s))
 
-    if not curve:
-        return None
+    # Debug: show the last 5 minutes
+    console.print("[dim]Outro similarity curve (episode tail vs ref start, 1 bar = 10s):[/dim]")
+    debug_start = max(0, len(curve) - 5 * 60)
+    for s in range(debug_start, len(curve), 10):
+        abs_sec = search_start + s
+        val = max(curve[s : s + 10])
+        bar = "#" * int(val * 40)
+        label = "<<" if val >= threshold else ""
+        console.print(f"[dim]  {format_timestamp(abs_sec)}  {val:.3f}  {bar} {label}[/dim]")
 
-    max_val = max(curve)
-    if max_val > 0:
-        curve = [v / max_val for v in curve]
-
-    return _find_outro_start(curve, threshold)
+    # Scan backward: find where the music starts (last gap of low similarity)
+    outro_curve_start = _find_outro_start(curve, threshold)
+    if outro_curve_start is not None:
+        return float(search_start + outro_curve_start)
+    return None
 
 
 def _detect(
@@ -143,15 +172,19 @@ def _detect(
     ref_mel = np.log1p(librosa.feature.melspectrogram(
         y=ref[:compare_samples], sr=sr, n_fft=n_fft, hop_length=hop, n_mels=n_mels
     ))
-    ep_mel = np.log1p(librosa.feature.melspectrogram(
+    ep_mel_intro = np.log1p(librosa.feature.melspectrogram(
         y=episode[:compare_samples], sr=sr, n_fft=n_fft, hop_length=hop, n_mels=n_mels
     ))
+    # Full episode mel for outro detection (outro is near the end)
+    ep_mel_full = np.log1p(librosa.feature.melspectrogram(
+        y=episode, sr=sr, n_fft=n_fft, hop_length=hop, n_mels=n_mels
+    ))
 
-    n_frames = min(ref_mel.shape[1], ep_mel.shape[1])
+    n_frames = min(ref_mel.shape[1], ep_mel_intro.shape[1])
     raw_curve: list[float] = []
     for i in range(n_frames):
         r = ref_mel[:, i]
-        e = ep_mel[:, i]
+        e = ep_mel_intro[:, i]
         r_norm = np.linalg.norm(r)
         e_norm = np.linalg.norm(e)
         if r_norm > 0 and e_norm > 0:
@@ -183,9 +216,8 @@ def _detect(
     boundaries = MusicBoundaries()
     boundaries.intro_end = _find_intro_end(curve, threshold)
 
-    # Outro detection: use cross-correlation with a chunk from the reference
-    # against the tail of the episode (reuse the old approach for outro only)
-    boundaries.outro_start = _detect_outro(episode, ref, sr, ep_sec, threshold)
+    # Outro detection: compare episode tail against reference start using mel spectrograms
+    boundaries.outro_start = _detect_outro(ep_mel_full, ref_mel, ep_sec, threshold, _SMOOTH_WINDOW)
 
     # Only report outro if it's clearly separate from the intro
     if (
