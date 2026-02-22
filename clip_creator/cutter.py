@@ -6,7 +6,7 @@ import shutil
 import subprocess
 from pathlib import Path
 
-from clip_creator.models import CandidateSegment, ClipResult, CutterError
+from clip_creator.models import CandidateSegment, ClipResult, CutterError, format_timestamp
 
 
 def _check_ffmpeg() -> str:
@@ -74,7 +74,7 @@ def cut_clips(
             )
         except subprocess.CalledProcessError as e:
             raise CutterError(
-                f"FFmpeg failed for clip {i} ({segment.start:.1f}s–{segment.end:.1f}s): "
+                f"FFmpeg failed for clip {i} ({format_timestamp(segment.start)}–{format_timestamp(segment.end)}): "
                 f"{e.stderr.strip()}"
             ) from e
 

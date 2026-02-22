@@ -11,6 +11,7 @@ from clip_creator.models import (
     LLMError,
     TopicBoundary,
     Transcript,
+    format_timestamp,
 )
 
 SYSTEM_PROMPT = """\
@@ -49,9 +50,7 @@ Selecciona los {count} mejores segmentos para clips de redes sociales.\
 def _format_transcript(transcript: Transcript) -> str:
     lines = []
     for seg in transcript.segments:
-        minutes = int(seg.start // 60)
-        seconds = int(seg.start % 60)
-        lines.append(f"[{minutes:02d}:{seconds:02d}] {seg.text}")
+        lines.append(f"[{format_timestamp(seg.start)}] {seg.text}")
     return "\n".join(lines)
 
 
@@ -63,9 +62,7 @@ def _format_boundaries(boundaries: list[TopicBoundary]) -> str:
         )
     lines = ["Cambios de tema detectados (timestamps donde suena el jingle):"]
     for b in boundaries:
-        minutes = int(b.timestamp // 60)
-        seconds = int(b.timestamp % 60)
-        lines.append(f"  - [{minutes:02d}:{seconds:02d}] (confianza: {b.confidence:.2f})")
+        lines.append(f"  - [{format_timestamp(b.timestamp)}] (confianza: {b.confidence:.2f})")
     return "\n".join(lines)
 
 
@@ -99,7 +96,9 @@ def _validate_segments(
                 f"Segmento {i + 1}: dura {duration:.1f}s, máximo es {config.segments.max_seconds}s"
             )
         if seg.start >= seg.end:
-            errors.append(f"Segmento {i + 1}: start ({seg.start}) >= end ({seg.end})")
+            errors.append(
+                f"Segmento {i + 1}: start ({format_timestamp(seg.start)}) >= end ({format_timestamp(seg.end)})"
+            )
     if len(segments) != config.segments.count:
         errors.append(
             f"Se esperaban {config.segments.count} segmentos, se recibieron {len(segments)}"

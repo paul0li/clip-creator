@@ -23,7 +23,7 @@ class WhisperConfig(BaseModel):
 
 class IntroConfig(BaseModel):
     reference_path: str = "clip_creator/assets/intro.mp3"
-    threshold: float = 0.5
+    threshold: float = 0.52
 
 
 class JingleConfig(BaseModel):

@@ -5,7 +5,7 @@ whisper:
 
 intro:
   reference_path: clip_creator/assets/intro.mp3
-  threshold: 0.4
+  threshold: 0.52
 
 jingle:
   reference_path: assets/jingle_reference.wav

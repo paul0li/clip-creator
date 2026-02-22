@@ -16,14 +16,16 @@ from clip_creator.models import (
     TranscriptionError,
 )
 from clip_creator.pipeline import (
+    extract_audio,
     run_full_pipeline,
-    run_pipeline,
-    run_pipeline_from_transcript,
+    step_detect_intro,
+    step_select,
+    step_transcribe,
 )
 
 
 def _add_common_flags(parser: argparse.ArgumentParser) -> None:
-    """Add flags shared by select and run subcommands."""
+    """Add flags shared across subcommands."""
     parser.add_argument(
         "--config", help="Path to config.yaml (default: ./config.yaml)"
     )
@@ -37,22 +39,29 @@ def _add_common_flags(parser: argparse.ArgumentParser) -> None:
     parser.add_argument(
         "--debug",
         action="store_true",
-        help="Save intermediate files (transcript, segments) for inspection",
+        help="Enable extra debug output (similarity curves, etc.)",
     )
 
 
 def _collect_overrides(args: argparse.Namespace) -> dict[str, str] | None:
     """Build config overrides dict from CLI flags."""
     overrides: dict[str, str] = {}
-    if args.llm_provider:
+    if getattr(args, "llm_provider", None):
         overrides["llm.provider"] = args.llm_provider
-    if args.llm_model:
+    if getattr(args, "llm_model", None):
         overrides["llm.model"] = args.llm_model
-    if args.whisper_mode:
+    if getattr(args, "whisper_mode", None):
         overrides["whisper.mode"] = args.whisper_mode
-    if args.whisper_model:
+    if getattr(args, "whisper_model", None):
         overrides["whisper.model"] = args.whisper_model
     return overrides or None
+
+
+def _load_config(args: argparse.Namespace):
+    """Load config from args."""
+    overrides = _collect_overrides(args)
+    config_path = Path(args.config) if getattr(args, "config", None) else None
+    return load_config(config_path=config_path, cli_overrides=overrides)
 
 
 def _build_parser() -> argparse.ArgumentParser:
@@ -62,73 +71,106 @@ def _build_parser() -> argparse.ArgumentParser:
     )
     subparsers = parser.add_subparsers(dest="command")
 
-    # --- select subcommand ---
-    select_parser = subparsers.add_parser(
-        "select", help="Analyse audio and select the best clip segments."
+    # --- extract ---
+    extract_p = subparsers.add_parser(
+        "extract", help="Extract audio from a video file."
     )
-    select_parser.add_argument("audio", help="Path to the episode audio file")
-    select_parser.add_argument(
-        "--transcript",
-        help="Path to a previously saved transcript JSON (skips transcription)",
-    )
-    select_parser.add_argument(
-        "--output", "-o", help="Write JSON output to this file instead of stdout"
-    )
-    _add_common_flags(select_parser)
+    extract_p.add_argument("video", help="Path to the source video file")
 
-    # --- cut subcommand ---
-    cut_parser = subparsers.add_parser(
+    # --- detect-intro ---
+    detect_p = subparsers.add_parser(
+        "detect-intro", help="Detect intro/outro music boundaries."
+    )
+    detect_p.add_argument("audio", help="Path to the episode audio file")
+    _add_common_flags(detect_p)
+
+    # --- transcribe ---
+    transcribe_p = subparsers.add_parser(
+        "transcribe", help="Transcribe audio to text."
+    )
+    transcribe_p.add_argument("audio", help="Path to the episode audio file")
+    transcribe_p.add_argument(
+        "--boundaries",
+        help="Path to boundaries JSON (auto-detected from {stem}_boundaries.json if not given)",
+    )
+    _add_common_flags(transcribe_p)
+
+    # --- select ---
+    select_p = subparsers.add_parser(
+        "select", help="Select the best clip segments from a transcript."
+    )
+    select_p.add_argument("transcript", help="Path to the transcript JSON file")
+    _add_common_flags(select_p)
+
+    # --- cut ---
+    cut_p = subparsers.add_parser(
         "cut", help="Cut video clips from segment selection output."
     )
-    cut_parser.add_argument("video", help="Path to the source video file")
-    cut_parser.add_argument(
+    cut_p.add_argument("video", help="Path to the source video file")
+    cut_p.add_argument(
         "--segments",
         required=True,
-        help="Path to segments JSON output (or inline JSON string)",
+        help="Path to segments JSON (or inline JSON string)",
     )
-    cut_parser.add_argument(
+    cut_p.add_argument(
         "--output-dir",
         default="./clips",
         help="Directory to write clips into (default: ./clips)",
     )
 
-    # --- run subcommand ---
-    run_parser = subparsers.add_parser(
-        "run", help="Full pipeline: video → segments → clips."
+    # --- run ---
+    run_p = subparsers.add_parser(
+        "run", help="Full pipeline: video → audio → boundaries → transcribe → select → cut."
     )
-    run_parser.add_argument("video", help="Path to the source video file")
-    run_parser.add_argument(
+    run_p.add_argument("video", help="Path to the source video file")
+    run_p.add_argument(
         "--output-dir",
         default="./clips",
         help="Directory to write clips into (default: ./clips)",
     )
-    _add_common_flags(run_parser)
+    _add_common_flags(run_p)
 
     return parser
 
 
-def _handle_select(args: argparse.Namespace) -> None:
-    """Run the segment-selection pipeline."""
-    overrides = _collect_overrides(args)
-    config_path = Path(args.config) if args.config else None
-    config = load_config(config_path=config_path, cli_overrides=overrides)
+# --- Handlers ---
 
+
+def _handle_extract(args: argparse.Namespace) -> None:
+    mp3_path = extract_audio(args.video)
+    print(mp3_path)
+
+
+def _handle_detect_intro(args: argparse.Namespace) -> None:
+    config = _load_config(args)
+    boundaries = step_detect_intro(args.audio, config)
+    print(boundaries.model_dump_json(indent=2))
+
+
+def _handle_transcribe(args: argparse.Namespace) -> None:
+    config = _load_config(args)
     try:
-        if args.transcript:
-            result = run_pipeline_from_transcript(args.audio, args.transcript, config)
-        else:
-            result = run_pipeline(args.audio, config, debug=args.debug)
-    except (TranscriptionError, LLMError) as e:
+        transcript = step_transcribe(
+            args.audio, config, boundaries_path=args.boundaries
+        )
+    except TranscriptionError as e:
         print(f"Error: {e}", file=sys.stderr)
         sys.exit(1)
+    print(transcript.model_dump_json(indent=2))
 
-    json_output = result.model_dump_json(indent=2)
 
-    if args.output:
-        Path(args.output).write_text(json_output)
-        print(f"Output written to {args.output}", file=sys.stderr)
-    else:
-        print(json_output)
+def _handle_select(args: argparse.Namespace) -> None:
+    config = _load_config(args)
+    try:
+        segments = step_select(args.transcript, config)
+    except LLMError as e:
+        print(f"Error: {e}", file=sys.stderr)
+        sys.exit(1)
+    # Output is already saved by step_select; print the segments list to stdout
+    print(json.dumps(
+        [s.model_dump() for s in segments],
+        indent=2,
+    ))
 
 
 def _parse_segments(raw: str) -> list[CandidateSegment]:
@@ -137,7 +179,6 @@ def _parse_segments(raw: str) -> list[CandidateSegment]:
     if path.exists():
         data = json.loads(path.read_text())
     else:
-        # Try parsing as inline JSON
         try:
             data = json.loads(raw)
         except json.JSONDecodeError:
@@ -156,36 +197,25 @@ def _parse_segments(raw: str) -> list[CandidateSegment]:
 
 
 def _handle_cut(args: argparse.Namespace) -> None:
-    """Run the clip-cutting pipeline."""
     segments = _parse_segments(args.segments)
-
     try:
         results = cut_clips(args.video, segments, args.output_dir)
     except CutterError as e:
         print(f"Error: {e}", file=sys.stderr)
         sys.exit(1)
-
-    json_output = json.dumps(
+    print(json.dumps(
         [r.model_dump() for r in results],
         indent=2,
-    )
-    print(json_output)
+    ))
 
 
 def _handle_run(args: argparse.Namespace) -> None:
-    """Run the full pipeline: video → audio → segments → clips."""
-    overrides = _collect_overrides(args)
-    config_path = Path(args.config) if args.config else None
-    config = load_config(config_path=config_path, cli_overrides=overrides)
-
+    config = _load_config(args)
     try:
-        result = run_full_pipeline(
-            args.video, config, args.output_dir, debug=args.debug
-        )
+        result = run_full_pipeline(args.video, config, args.output_dir)
     except (TranscriptionError, LLMError, CutterError) as e:
         print(f"Error: {e}", file=sys.stderr)
         sys.exit(1)
-
     print(result.model_dump_json(indent=2))
 
 
@@ -193,22 +223,21 @@ def main() -> None:
     parser = _build_parser()
     args = parser.parse_args()
 
-    if args.command == "select":
-        _handle_select(args)
-    elif args.command == "cut":
-        _handle_cut(args)
-    elif args.command == "run":
-        _handle_run(args)
+    handlers = {
+        "extract": _handle_extract,
+        "detect-intro": _handle_detect_intro,
+        "transcribe": _handle_transcribe,
+        "select": _handle_select,
+        "cut": _handle_cut,
+        "run": _handle_run,
+    }
+
+    handler = handlers.get(args.command)
+    if handler:
+        handler(args)
     else:
-        # Backward compat: bare `clip-creator audio.mp3` (no subcommand)
-        # Re-parse with the first positional as audio for select
-        if len(sys.argv) > 1 and not sys.argv[1].startswith("-"):
-            sys.argv.insert(1, "select")
-            args = parser.parse_args()
-            _handle_select(args)
-        else:
-            parser.print_help()
-            sys.exit(1)
+        parser.print_help()
+        sys.exit(1)
 
 
 if __name__ == "__main__":
