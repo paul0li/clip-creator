@@ -4,7 +4,7 @@ whisper:
   language: es
 
 intro:
-  reference_path: assets/intro.mp3
+  reference_path: clip_creator/assets/intro.mp3
   threshold: 0.6
 
 jingle:
