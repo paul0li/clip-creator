@@ -34,7 +34,7 @@ Go from video to clips in one command:
 
 ```bash
 # Produces clips in ./clips and prints JSON output
-uv run clip-creator run video.mp4 --output-dir ./clips
+uv run clip-creator run clip-creator/assets/video.mp4 --output-dir ./clips
 
 # Debug mode — also saves transcript and segments JSON files next to the video
 uv run clip-creator run video.mp4 --output-dir ./clips --debug
