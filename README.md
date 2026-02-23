@@ -34,7 +34,7 @@ Go from video to clips in one command:
 
 ```bash
 # Produces clips in ./clips and prints JSON output
-uv run clip-creator run clip-creator/assets/video.mp4 --output-dir ./clips
+uv run clip-creator run video.mp4 --output-dir ./clips
 
 # Debug mode — also saves transcript and segments JSON files next to the video
 uv run clip-creator run video.mp4 --output-dir ./clips --debug
@@ -43,46 +43,60 @@ uv run clip-creator run video.mp4 --output-dir ./clips --debug
 uv run clip-creator run video.mp4 --llm-provider openai --whisper-model large-v3
 ```
 
-This extracts audio from the video, transcribes it with Whisper, detects jingle boundaries, picks the 3 best moments via LLM, and cuts the clips with FFmpeg.
+This extracts audio from the video, transcribes it with Whisper, detects jingle boundaries, picks the best moments via LLM, and cuts the clips with FFmpeg.
 
-### `select` — Pick segments only
+### Individual steps
 
-Transcribe an episode and pick the 3 best clip-worthy moments (no cutting):
+You can also run each step separately:
+
+#### `extract` — Extract audio from video
 
 ```bash
-# Basic — transcribes with Whisper, then selects segments
-uv run clip-creator select episode.mp3
-
-# Use OpenAI instead of Anthropic
-uv run clip-creator select episode.mp3 --llm-provider openai
-
-# Save output to a file
-uv run clip-creator select episode.mp3 -o segments.json
-
-# Skip transcription if you already have a transcript
-uv run clip-creator select episode.mp3 --transcript transcript.json
-
-# Debug mode — saves transcript JSON next to the audio file
-uv run clip-creator select episode.mp3 --debug
+uv run clip-creator extract video.mp4
 ```
 
-### `cut` — Cut clips from segments
-
-Take the segments from `select` and cut actual video clips with FFmpeg:
+#### `detect-intro` — Detect intro/outro music
 
 ```bash
-# Cut clips from a video using the segment output
+uv run clip-creator detect-intro episode.mp3
+```
+
+#### `transcribe` — Transcribe audio
+
+```bash
+uv run clip-creator transcribe episode.mp3
+
+# Use Fireflies instead of local Whisper
+uv run clip-creator transcribe episode.mp3 --whisper-mode fireflies --audio-url https://example.com/episode.mp3
+```
+
+#### `select` — Pick the best clip segments
+
+```bash
+# From a transcript JSON file
+uv run clip-creator select transcript.json
+
+# Use OpenAI instead of Anthropic
+uv run clip-creator select transcript.json --llm-provider openai
+```
+
+The transcript is split into ~10-minute windows, and the LLM picks the best candidate from each window. A final pass selects the top 3 across all windows. This avoids hallucination from sending the full transcript in a single prompt.
+
+#### `cut` — Cut clips from segments
+
+```bash
 uv run clip-creator cut video.mp4 --segments segments.json --output-dir ./clips
 ```
 
-This produces `clip_1.mp4`, `clip_2.mp4`, `clip_3.mp4` in the output directory.
-
 The `--segments` flag accepts either the full JSON output from `select` or a bare list of segments.
 
-### Backward compatibility
+## Configuration
 
-You can also run without a subcommand — it defaults to `select`:
+Settings are loaded in this order (later overrides earlier):
 
-```bash
-uv run clip-creator episode.mp3
-```
+1. Pydantic defaults
+2. `config.yaml`
+3. Environment variables (API keys only)
+4. CLI flags
+
+See `config.yaml` for available options.
